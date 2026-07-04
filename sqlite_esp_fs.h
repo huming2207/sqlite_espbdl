@@ -17,7 +17,7 @@ extern "C" {
  *
  * The application must mount FATFS before calling this function. After it
  * succeeds, normal absolute FATFS paths can be passed to sqlite3_open(), for
- * example sqlite3_open("/fat_partition/data.db", &db).
+ * example sqlite3_open("/fat/data.db", &db).
  *
  * This VFS becomes SQLite's default VFS. It does not mount, unmount, format,
  * or take ownership of the FATFS volume.

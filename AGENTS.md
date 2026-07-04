@@ -117,7 +117,7 @@ include required to select this port. Prefer changes in `sqlite_port.h`,
 `sqlite_esp_fs.c/.h` is an opt-in comparison VFS over ESP-IDF's POSIX file
 API. The application mounts FATFS itself, calls `sqlite_fatfs_init()`, and can
 then use an absolute mounted path such as
-`sqlite3_open("/fat_partition/data.db", &db)`. After closing all SQLite
+`sqlite3_open("/fat/data.db", &db)`. After closing all SQLite
 connections, call `sqlite_fatfs_deinit()` before unmounting FATFS.
 
 The wrapper does not mount, format, unmount, or own the FATFS volume. It uses
@@ -150,8 +150,16 @@ The demo also runs a small watchdog-safe API benchmark entirely in
 `main/hello_world_main.c`. It times individual `sqlite3_prepare_v2`, bind,
 step, reset, finalize, exec, incremental-BLOB, and WAL-checkpoint calls with
 `esp_timer_get_time()`, yielding between samples. No benchmark counters or
-instrumentation are built into the BDL VFS, so the same API-level workload can
-later be used unchanged with a FATFS VFS.
+instrumentation are built into either VFS.
+
+After the raw-BDL workload completes and fully deinitializes, the demo obtains
+a fresh partition-BDL/WL-BDL stack for the same `sqlite` partition. It calls
+`esp_vfs_fat_bdl_mount()` with `format_if_mount_failed=true`; the raw layout is
+not a FAT volume, so this destroys it, formats the partition as FATFS, and
+mounts it at `/fat`. The demo then initializes `sqlite_fatfs`, opens
+`/fat/data.db`, and runs the exact same CRUD, JSON, BLOB,
+multi-connection, integrity, and API-timing workload. SQLite is deinitialized
+before FATFS is unmounted, then the WL and partition handles are released.
 
 ## Maintenance invariants
 

@@ -155,11 +155,11 @@ to `sqlite3_open()`:
 #include "sqlite3.h"
 #include "sqlite_esp_fs.h"
 
-// Mount FATFS at /fat_partition before initializing SQLite.
+// Mount FATFS at /fat before initializing SQLite.
 ESP_ERROR_CHECK(sqlite_fatfs_init());
 
 sqlite3 *db = NULL;
-int rc = sqlite3_open("/fat_partition/data.db", &db);
+int rc = sqlite3_open("/fat/data.db", &db);
 if (rc != SQLITE_OK) {
     sqlite3_close(db);
     db = NULL;
@@ -214,6 +214,75 @@ fully deinitialize it before switching backends. Useful timings include:
 Yield between benchmark samples on ESP-IDF so a long run does not starve the
 idle tasks or trigger the task watchdog. The demo in `main/hello_world_main.c`
 contains the current watchdog-safe API benchmark.
+
+The demo executes two sequential phases against the partition labelled
+`sqlite`:
+
+1. It runs the complete demo and benchmark directly through the raw `espbdl`
+   VFS.
+2. It deinitializes the raw VFS, recreates the partition/WL BDL stack, and
+   calls `esp_vfs_fat_bdl_mount()` with `format_if_mount_failed=true`. Because
+   the raw layout is not FATFS, this reformats and mounts the same partition at
+   `/fat`. It then opens `/fat/data.db` through
+   `sqlite_fatfs` and runs the same workload and timings.
+
+This comparison is destructive: after the firmware finishes, the original
+raw-BDL database has been replaced by the FATFS volume. SQLite is shut down
+before the FATFS unmount, and the FATFS wrapper does not own either BDL handle.
+
+The short `/fat` mountpoint is intentional. The current ESP-IDF FATFS VFS
+stores mount paths in a 15-byte array but copies one byte less; a 14-character
+mountpoint such as `/fat_partition` is truncated internally and subsequently
+cannot be found by `esp_vfs_fat_info()` or the BDL unmount helper.
+
+### Example benchmark result
+
+Here's the outcome of the benchmark on a ESP32-S31 that write to a NOR flash partition, with build configuration set below:
+
+```kconfig
+CONFIG_IDF_TARGET="esp32s31"
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_SPEED_250M=y
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY=y
+CONFIG_ESP_CONSOLE_UART_CUSTOM=y
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=65536
+CONFIG_IDF_EXPERIMENTAL_FEATURES=y
+```
+
+The ESP-IDF version is v6.2 master branch, see: https://github.com/espressif/esp-idf/commit/fa8039b5cadb6e85dd830ff8c2c4bd73b6538aee
+
+| Measurement | ESP-BDL | FATFS | ESP-BDL result |
+| --- | ---: | ---: | ---: |
+| Sum of timed SQLite APIs | 1.004 s | 1.731 s | 42% less time, 1.72x faster |
+| Timed benchmark wall time | 1.37 s | 2.32 s | 41% less time, 1.69x faster |
+| Complete demo workload | 6.80 s | 9.64 s | 29% less time, 1.42x faster |
+
+The largest storage-related differences in that run were:
+
+| SQLite operation | FATFS time / ESP-BDL time |
+| --- | ---: |
+| `sqlite3_step()` inserts | 57.6x |
+| `sqlite3_exec(COMMIT)` | 1.71x |
+| `sqlite3_step()` selects | 1.95x |
+| `sqlite3_step()` deletes | 1.93x |
+| `sqlite3_blob_open()` | 10.7x |
+| `sqlite3_blob_write()` | 3.65x |
+| `sqlite3_blob_read()` | 6.17x |
+| `sqlite3_blob_close()` | 2.48x |
+| WAL checkpoint | 1.51x |
+
+Prepare, bind, and finalize timings were effectively equal, indicating that
+the advantage was concentrated in filesystem and persistence work. The FATFS
+insert result included one 155 ms outlier; its minimum insert latency was close
+to ESP-BDL. Treat these figures as one observed run rather than a performance
+guarantee. For stable results, collect multiple runs and compare medians and
+tail latency under the same flash, clock, build, and durability settings.
 
 
 ## License
