@@ -1,0 +1,1 @@
+idf_component_register(SRCS "sqlite3.c" INCLUDE_DIRS ".")
