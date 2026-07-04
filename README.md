@@ -214,3 +214,8 @@ fully deinitialize it before switching backends. Useful timings include:
 Yield between benchmark samples on ESP-IDF so a long run does not starve the
 idle tasks or trigger the task watchdog. The demo in `main/hello_world_main.c`
 contains the current watchdog-safe API benchmark.
+
+
+## License
+
+WTFPL
