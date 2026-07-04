@@ -2,8 +2,7 @@
 
 ## Scope and source of truth
 
-These instructions apply to `components/sqlite_espbdl`. The component targets
-the current ESP-IDF tree at `/home/hu/esp/esp-idf-master`. The Block Device
+These instructions apply to `components/sqlite_espbdl`. The Block Device
 Layer is new and must not be inferred from older storage APIs: consult the
 Espressif documentation MCP first, then the local ESP-IDF headers and source.
 
@@ -133,27 +132,6 @@ database. Override `SQLITE_ESP_FS_MAX_DATABASES` or
 `SQLITE_ESP_FS_SHM_PAGES` at compile time when a benchmark needs more. Keep
 this wrapper separate from `sqlite_espbdl.c`; benchmark-specific behavior must
 not alter the production raw-BDL VFS.
-
-## Validation completed
-
-- `idf.py build` passes against `/home/hu/esp/esp-idf-master` for the configured
-  ESP32-S31 target.
-- A native aligned NOR-style BDL harness verified forced RMW behavior, WAL
-  transactions, checkpointing, normal-locking shared memory, two simultaneous
-  connections, persistence across deinit/reinit, and handle release.
-- The final component archive has no unresolved pthread symbols.
-
-Build command:
-
-```sh
-source /home/hu/esp/esp-idf-master/export.sh
-idf.py build
-```
-
-Before handing off component changes, also run `git diff --check`. For VFS,
-WAL, locking, allocation, or persistence changes, exercise the aligned
-NOR-style host harness or an equivalent test that rejects writes attempting to
-change erased bits without an erase.
 
 ## Demo application
 
